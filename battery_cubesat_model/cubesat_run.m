@@ -20,7 +20,7 @@ fault_types = { ...
 n = N_max;
 battID = repmat({battery_id}, n, 1);
 cycleNums = (1:n)';
-FAULT = cell(n, 1);
+
 IRs = zeros(n,1);
 QCs = zeros(n,1);
 QDs = zeros(n,1);
@@ -101,19 +101,19 @@ end
 
 % Compute cycle life (first cycle where SOH < 0.80)
 idx_eol = find(sohs < 0.80, 1);
-if isempty(idx_eol)
-    cl_val = n;
-else
-    cl_val = idx_eol;
-end
-cycle_life = repmat(cl_val, n, 1);
+% if isempty(idx_eol)
+%     cl_val = n;
+% else
+%     cl_val = idx_eol;
+% end
+% cycle_life = repmat(cl_val, n, 1);
 
 % Build table with 14 features (+ fault_type)
 T = table(battID, cycleNums, IRs, QCs, QDs, V_means, V_mins, V_maxs, ...
-    Tavgs, Tmins, Tmaxs, chargetimes, discharge_times, sohs, cycle_life, ...
+    Tavgs, Tmins, Tmaxs, chargetimes, discharge_times, sohs, ...
     'VariableNames', {'battery_id','cycle','IR','QC','QD','V_mean','V_min','V_max', ...
-                      'Tavg','Tmin','Tmax','chargetime','discharge_time','soh','cycle_life'});
-T.fault_type = FAULT;
+                      'Tavg','Tmin','Tmax','chargetime','discharge_time','soh'});
+
 
 % Export CSV
 timestamp = datestr(now, 'yyyymmdd_HHMMSS');
