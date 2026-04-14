@@ -1,26 +1,27 @@
 function [value, isterminal, direction] = cubesat_events(t, x, p, phase)
-% Événements pour arrêter la simulation
-% phase: 'discharge' ou 'charge'
+% =========================================================================
+% Event detection for battery cycle termination
+% CORRECTED: Unified implementation, consistent direction values
+%
+% phase: 'discharge' or 'charge'
+% =========================================================================
 
 SOC = x(1);
 
 if strcmp(phase, 'discharge')
-    value = SOC - p.SOC_min;  % Arrêt quand SOC = SOC_min
+    % Stop discharge when SOC falls to minimum
+    value = SOC - p.SOC_min;      % Zero crossing when SOC = SOC_min
+    isterminal = 1;               % Stop integration
+    direction = -1;               % Detect decreasing (SOC declining during discharge)
+    
 elseif strcmp(phase, 'charge')
-    value = SOC - 0.99;        % Arrêt quand SOC = 0.99
+    % Stop charge when SOC reaches 99%
+    value = SOC - 0.99;           % Zero crossing when SOC = 0.99
+    isterminal = 1;               % Stop integration
+    direction = 1;                % Detect increasing (SOC rising during charge)
+    
 else
-    error('Phase inconnue');
+    error('Unknown phase: %s (use "discharge" or "charge")', phase);
 end
 
-isterminal = 1;   % Arrêter l'intégration
-direction = -1;   % Pour décharge: SOC décroît; pour charge: SOC croît est OK aussi
-end
-
-% Fonctions wrapper pour les événements séparés
-function [val, ist, dir] = evt_dch_wrapper(t, x, p)
-    [val, ist, dir] = cubesat_events(t, x, p, 'discharge');
-end
-
-function [val, ist, dir] = evt_ch_wrapper(t, x, p)
-    [val, ist, dir] = cubesat_events(t, x, p, 'charge');
 end
