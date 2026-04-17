@@ -1,27 +1,29 @@
 function [value, isterminal, direction] = cubesat_events(t, x, p, phase)
 % =========================================================================
-% Event detection for battery cycle termination
-% CORRECTED: Unified implementation, consistent direction values
+% cubesat_events.m  —  v3  (unchanged from v2)
 %
-% phase: 'discharge' or 'charge'
+%   phase='discharge'  stop when SOC falls  to SOC_min  (direction −1)
+%   phase='charge'     stop when SOC rises  to 0.99     (direction +1)
+%
+% Note: simulate_cycle.m defines inline event functions (evt_dch / evt_ch)
+% that are the active implementations used by ode45. This file provides
+% the same logic for any external caller or reference use.
 % =========================================================================
 
 SOC = x(1);
 
 if strcmp(phase, 'discharge')
-    % Stop discharge when SOC falls to minimum
-    value = SOC - p.SOC_min;      % Zero crossing when SOC = SOC_min
-    isterminal = 1;               % Stop integration
-    direction = -1;               % Detect decreasing (SOC declining during discharge)
-    
+    value      = SOC - p.SOC_min;
+    isterminal = 1;
+    direction  = -1;   % DECREASING crossing
+
 elseif strcmp(phase, 'charge')
-    % Stop charge when SOC reaches 99%
-    value = SOC - 0.99;           % Zero crossing when SOC = 0.99
-    isterminal = 1;               % Stop integration
-    direction = 1;                % Detect increasing (SOC rising during charge)
-    
+    value      = SOC - 0.99;
+    isterminal = 1;
+    direction  = +1;   % INCREASING crossing
+
 else
-    error('Unknown phase: %s (use "discharge" or "charge")', phase);
+    error('cubesat_events: unknown phase "%s". Use "discharge" or "charge".', phase);
 end
 
 end

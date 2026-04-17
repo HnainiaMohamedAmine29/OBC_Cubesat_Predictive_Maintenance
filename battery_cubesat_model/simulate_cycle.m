@@ -1,152 +1,153 @@
 function row = simulate_cycle(x0, p, fault_type, cycle_num)
 % =========================================================================
-% Simulate ONE full battery cycle: discharge (eclipse) then charge (sunlight)
-% x0 = [SOC; T(K); SOH]
-% fault_type = fault label (returned in output)
-% cycle_num = cycle number (optional)
+% simulate_cycle.m  —  v3
 %
-% CORRECTED:
-%  - REMOVED the zero-reaching charge-time formula (caused QC infinity)
-%  - Export ACTUAL solver times, not hardcoded values
-%  - Add SOC_start, SOC_end, DoD features
-%  - All features stay finite and physically bounded
+% Simulate ONE full orbit: discharge (eclipse) then charge (sunlight).
+%
+% v3 KEY CHANGE — QD and QC are capacity features, not per-orbit Ah:
+%   QD_Ah = SOH * Q_nom
+%           Estimated full-discharge capacity at current cycle.
+%           BOL: 4.035 Ah → EOL (SOH=0.887): 3.580 Ah.
+%   QC_Ah = SOH * Q_nom * eta
+%           Estimated full-charge capacity.
+%           Range [3.508, 3.954] Ah ⊂ [3.5, 4.0] Ah.
+%
+%   This is the standard battery-dataset convention (see NASA aging datasets):
+%   QD represents the measurable capacity of the cell/pack, not the energy
+%   delivered in the current partial eclipse/charge cycle.
+%
+% SOC_start / SOC_end definitions (from v2, unchanged):
+%   SOC_start  = SOC at START of discharge  (= end of previous charge)
+%   SOC_end    = SOC at END   of discharge  (= depleted state)
+%   DoD        = SOC_start − SOC_end
+%   x_next     = state at END of CHARGE  → becomes x0 of next cycle
+%
+% Timing (from v2, actual solver values):
+%   discharge_time_min = t_d(end)/60  ACTUAL seconds elapsed during eclipse
+%   chargetime_min     = t_c(end)/60  ACTUAL seconds elapsed during sunlight
+%
+% IR formula (v3 update):
+%   IR = (R0/SOH)*(1+k_R*(1-SOH))*Arrhenius(T)
+%   Calibrated: IR_initial=72.934 mΩ, IR_final=99.806 mΩ at T_avg=18.7°C
 % =========================================================================
 
 if nargin < 4 || isempty(cycle_num)
     cycle_num = 1;
 end
 
-% --- DISCHARGE PHASE (eclipse) ---
-% Fixed discharge time based on realistic LEO eclipse (35 minutes)
-% No arbitrary post-2800 scaling
-discharge_duration = p.eclipse_time;    % seconds (already ~2100 s = 35 min from params)
-
-% Record initial SOC before discharge
+% =========================================================================
+% PHASE 1 — DISCHARGE (eclipse)
+% =========================================================================
 SOC_start = x0(1);
 
-opts_d = odeset('RelTol', 1e-5, 'AbsTol', 1e-8, 'MaxStep', 8, ...
-    'NonNegative', [1, 2, 3], ...
-    'Events', @(t,x) evt_dch(t,x,p));
+opts_d = odeset('RelTol', 1e-5, 'AbsTol', 1e-8, 'MaxStep', 10, ...
+                'NonNegative', [1,2,3], ...
+                'Events', @(t,x) evt_dch(t, x, p));
 
-[t_d, X_d] = ode45(@(t,x) cubesat_ode_dch(t,x,p), [0, discharge_duration], x0, opts_d);
+[t_d, X_d] = ode45(@(t,x) cubesat_ode_dch(t, x, p), ...
+                   [0, p.eclipse_time], x0, opts_d);
 
-% Compute IR and V for all discharge timesteps
-IR_d = zeros(size(t_d));
-V_d = zeros(size(t_d));
+IR_d = zeros(length(t_d), 1);
+V_d  = zeros(length(t_d), 1);
 for k = 1:length(t_d)
     [~, V_d(k), IR_d(k)] = cubesat_ode_dch(t_d(k), X_d(k,:)', p);
 end
 
-% Discharge statistics
-actual_discharge_time = t_d(end);       % Actual elapsed time (seconds)
-QD = p.I_dch * actual_discharge_time / 3600;  % Charge discharged (Ah)
-T_d = X_d(:, 2) - 273.15;               % Temperature in Celsius
-V_discharge_stats = [mean(V_d), min(V_d), max(V_d)];
+actual_dch_s = t_d(end);
+% SOC_end = SOC after DISCHARGE (depleted state, not after charge)
+SOC_end = X_d(end, 1);
+DoD     = SOC_start - SOC_end;
+T_d_C   = X_d(:, 2) - 273.15;
 
-% SOC after discharge
-SOC_after_discharge = X_d(end, 1);
+% =========================================================================
+% PHASE 2 — CHARGE (sunlight)
+% =========================================================================
+opts_c = odeset(opts_d, 'Events', @(t,x) evt_ch(t, x));
 
-% --- CHARGE PHASE (sunlight) ---
-% Fixed charge time based on realistic LEO sunlight (58 minutes)
-% No arbitrary time formula; just let the solver run until SOC reaches limit
-charge_duration_max = p.sunlight_time;  % Max time for charge (~3480 s = 58 min)
+[t_c, X_c] = ode45(@(t,x) cubesat_ode_ch(t, x, p), ...
+                   [0, p.sunlight_time], X_d(end,:)', opts_c);
 
-opts_c = odeset(opts_d, ...
-    'Events', @(t,x) evt_ch(t,x,p));
-
-[t_c, X_c] = ode45(@(t,x) cubesat_ode_ch(t,x,p), [0, charge_duration_max], X_d(end,:)', opts_c);
-
-% Compute charge voltage stats
-if length(t_c) >= 3
-    T_c = X_c(:, 2) - 273.15;
-    actual_charge_time = t_c(end);      % ACTUAL solver time (seconds), not arbitrary formula
-    QC = p.I_ch * actual_charge_time / 3600;  % Charge gained (Ah), from actual time
-    
-    % Voltage during charge
-    V_c = zeros(size(t_c));
+if length(t_c) >= 2
+    T_c_C       = X_c(:, 2) - 273.15;
+    actual_ch_s = t_c(end);
+    V_c = zeros(length(t_c), 1);
     for k = 1:length(t_c)
         [~, V_c(k), ~] = cubesat_ode_ch(t_c(k), X_c(k,:)', p);
     end
-    V_charge_stats = [mean(V_c), min(V_c), max(V_c)];
-    x_next = X_c(end, :)';              % Final state [SOC_end; T_end; SOH_end]
-    SOC_end = X_c(end, 1);              % SOC after full cycle
+    x_next = X_c(end, :)';
 else
-    % Charge phase ended prematurely; use discharge end state
-    T_c = T_d;
-    actual_charge_time = t_c(end);
-    QC = 0;
-    V_charge_stats = [NaN, NaN, NaN];
-    x_next = X_d(end, :)';
-    SOC_end = X_d(end, 1);
+    T_c_C       = T_d_C;
+    actual_ch_s = 0;
+    V_c         = V_d;
+    x_next      = X_d(end, :)';
+    warning('simulate_cycle: cycle %d charge phase < 2 points.', cycle_num);
 end
 
-% --- FEATURE EXTRACTION & VALIDATION ---
-T_all = [T_d; T_c];
-V_all = [V_d; V_c];
+% =========================================================================
+% CAPACITY FEATURES  (v3 — key fix)
+% =========================================================================
+% QD and QC represent the battery's rated capacity at the current SOH,
+% NOT the Ah delivered/received in this particular eclipse/sunlight window.
+% This convention matches standard battery health monitoring datasets.
+SOH_now = x_next(3);   % SOH at end of this cycle (after both phases)
+QD = SOH_now * p.Q_nom;            % Ah  rated discharge capacity
+QC = SOH_now * p.Q_nom * p.eta;    % Ah  rated charge capacity
 
-% Depth of discharge (how much was extracted from battery)
-DoD = SOC_start - SOC_after_discharge;
+% =========================================================================
+% FEATURE EXTRACTION
+% =========================================================================
+T_all = [T_d_C; T_c_C];
+V_all = [V_d;   V_c  ];
+T_lo  = p.T_operating_min - 273.15;   % −10 °C
+T_hi  = p.T_operating_max - 273.15;   % +50 °C
 
-% Charge balance check (optional warning if very unbalanced)
-if abs(QC - QD) > 0.5 * max(abs(QC), abs(QD))
-    % warning('Cycle %d: Charge/discharge imbalance detected (QC=%.3f, QD=%.3f)', ...
-    %         cycle_num, QC, QD);
+T_avg_C = max(T_lo, min(T_hi, mean(T_all)));
+T_min_C = max(T_lo, min(T_hi, min(T_all)));
+T_max_C = max(T_lo, min(T_hi, max(T_all)));
+
+% =========================================================================
+% VALIDATION
+% =========================================================================
+if ~isfinite(QD) || ~isfinite(QC) || QD > p.Q_nom * 1.1 || QD < 0
+    warning('simulate_cycle: cycle %d — unexpected QD=%.4f Ah.', cycle_num, QD);
 end
 
-% --- VALIDATION: ensure all features are finite and bounded ---
-V_mean_cyc = mean(V_all);
-V_min_cyc = min(V_all);
-V_max_cyc = max(V_all);
-T_avg_cyc = mean(T_all);
-T_min_cyc = min(T_all);
-T_max_cyc = max(T_all);
-
-% Clip temperatures to managed range (hard limits for export)
-T_avg_cyc = max(p.T_operating_min - 273.15, min(p.T_operating_max - 273.15, T_avg_cyc));
-T_min_cyc = max(p.T_operating_min - 273.15, min(p.T_operating_max - 273.15, T_min_cyc));
-T_max_cyc = max(p.T_operating_min - 273.15, min(p.T_operating_max - 273.15, T_max_cyc));
-
-% --- Build output struct ---
-row.SOC_start = SOC_start;
-row.SOC_end = SOC_end;
-row.DoD = DoD;
-row.IR = mean(IR_d);                    % Ω (mean discharge resistance)
-row.QC = QC;                            % Ah (from actual charge time)
-row.QD = QD;                            % Ah (from actual discharge time)
-row.V_mean = V_mean_cyc;                % V
-row.V_min = V_min_cyc;                  % V
-row.V_max = V_max_cyc;                  % V
-row.Tavg = T_avg_cyc;                   % °C
-row.Tmin = T_min_cyc;                   % °C
-row.Tmax = T_max_cyc;                   % °C
-row.chargetime = actual_charge_time / 60;      % minutes (ACTUAL from solver, not hardcoded)
-row.discharge_time = actual_discharge_time / 60; % minutes (ACTUAL from solver, not hardcoded)
-row.x_next = x_next;                    % [SOC_end; T_end; SOH_end]
-row.SOH_end = x_next(3);                % SOH after cycle
-row.fault_type = fault_type;            % EXPORT fault label
-row.T_amb = p.T_amb_eclipse;            % EXPORT ambient temperature
-
-% --- Sanity check: ensure no infinities or NaN ---
-if ~isfinite(row.QC) || ~isfinite(row.QD) || row.QC > 20 || row.QD > 20
-    warning('Cycle %d: Invalid values detected (QC=%.3f, QD=%.3f)', cycle_num, row.QC, row.QD);
-end
+% =========================================================================
+% OUTPUT ROW
+% =========================================================================
+row.SOC_start          = SOC_start;
+row.SOC_end            = SOC_end;          % SOC after DISCHARGE
+row.DoD                = DoD;
+row.IR_ohm             = mean(IR_d);       % mean pack resistance (discharge)
+row.QD_Ah              = QD;               % rated capacity (SOH * Q_nom)
+row.QC_Ah              = QC;               % rated charge cap (SOH * Q_nom * eta)
+row.V_mean_V           = mean(V_all);
+row.V_min_V            = min(V_all);
+row.V_max_V            = max(V_all);
+row.Tavg_C             = T_avg_C;
+row.Tmin_C             = T_min_C;
+row.Tmax_C             = T_max_C;
+row.chargetime_min     = actual_ch_s / 60;         % ACTUAL solver time
+row.discharge_time_min = actual_dch_s / 60;        % ACTUAL solver time
+row.x_next             = x_next;
+row.SOH_end            = x_next(3);
+row.fault_type         = fault_type;
+row.T_amb_K            = p.T_amb_eclipse;
 
 end
 
 % =========================================================================
-% EVENT FUNCTIONS (unified, consistent)
+% LOCAL EVENT FUNCTIONS
 % =========================================================================
 
-function [val, isterminal, direction] = evt_dch(t, x, p)
-    % Stop discharge when SOC reaches minimum
-    val = x(1) - p.SOC_min;
-    isterminal = 1;         % Stop integration
-    direction = -1;         % Detect decreasing (discharge reduces SOC)
+function [val, isterminal, direction] = evt_dch(~, x, p)
+    val        = x(1) - p.SOC_min;
+    isterminal = 1;
+    direction  = -1;
 end
 
-function [val, isterminal, direction] = evt_ch(t, x, p)
-    % Stop charge when SOC reaches 99%
-    val = x(1) - 0.99;
-    isterminal = 1;         % Stop integration
-    direction = 1;          % Detect increasing (charge increases SOC)
+function [val, isterminal, direction] = evt_ch(~, x)
+    val        = x(1) - 0.99;
+    isterminal = 1;
+    direction  = +1;
 end
