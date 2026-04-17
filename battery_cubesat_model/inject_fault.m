@@ -1,19 +1,6 @@
 function [p_out, fault_state] = inject_fault(p, fault_type, fault_state, cycle_num)
 % =========================================================================
-% inject_fault.m  —  v3
-%
-% Persistent fault injection into battery parameters.
-% Fault multipliers are applied to the v3 base parameters.
-%
-% Fault types:
-%   'normal'           baseline aging (gamma=1, no modifications)
-%   'high_temperature' cooling failure → warmer structure, faster aging
-%   'low_temperature'  heater failure  → higher resistance, slower aging
-%   'capacity_fade'    SEI/material degradation → faster aging, higher R0
-%   'thermal_runaway'  catastrophic, irreversible, battery terminal
-%
-% Severity increases by 0.001 per cycle once a fault starts.
-% =========================================================================
+
 
 p_out     = p;
 p_out.OCV = p.OCV;   % preserve function handle

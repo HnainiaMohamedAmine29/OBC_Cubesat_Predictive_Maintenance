@@ -1,19 +1,6 @@
 function [dxdt, V_term, IR] = cubesat_ode_dch(t, x, p)
 % =========================================================================
-% cubesat_ode_dch.m  —  v3
-%
-% ODE for DISCHARGE phase (eclipse)
-% State: x = [SOC ; T (K) ; SOH]
-%
-% v3 change: IR formula updated to include resistance growth with degradation
-%   IR = (R0/SOH) * (1 + k_R*(1-SOH)) * Arrhenius(T)
-%
-%   At SOH=1.00: IR = R0 * Arrhenius                   → 72.934 mΩ at 18.7°C
-%   At SOH=0.887: IR = (R0/0.887)*(1+1.899*0.113)*Arr  → 99.806 mΩ at 18.7°C
-%
-% Thermal model (VACUUM, no convection):
-%   dT/dt = (Q_joule + P_heater − Q_rad − Q_cond) / (m·Cp)
-% =========================================================================
+
 
 % --- State bounds ---
 SOC = max(p.SOC_min,          min(p.SOC_max,          x(1)));

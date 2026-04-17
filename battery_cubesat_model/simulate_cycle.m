@@ -1,35 +1,5 @@
 function row = simulate_cycle(x0, p, fault_type, cycle_num)
 % =========================================================================
-% simulate_cycle.m  —  v3
-%
-% Simulate ONE full orbit: discharge (eclipse) then charge (sunlight).
-%
-% v3 KEY CHANGE — QD and QC are capacity features, not per-orbit Ah:
-%   QD_Ah = SOH * Q_nom
-%           Estimated full-discharge capacity at current cycle.
-%           BOL: 4.035 Ah → EOL (SOH=0.887): 3.580 Ah.
-%   QC_Ah = SOH * Q_nom * eta
-%           Estimated full-charge capacity.
-%           Range [3.508, 3.954] Ah ⊂ [3.5, 4.0] Ah.
-%
-%   This is the standard battery-dataset convention (see NASA aging datasets):
-%   QD represents the measurable capacity of the cell/pack, not the energy
-%   delivered in the current partial eclipse/charge cycle.
-%
-% SOC_start / SOC_end definitions (from v2, unchanged):
-%   SOC_start  = SOC at START of discharge  (= end of previous charge)
-%   SOC_end    = SOC at END   of discharge  (= depleted state)
-%   DoD        = SOC_start − SOC_end
-%   x_next     = state at END of CHARGE  → becomes x0 of next cycle
-%
-% Timing (from v2, actual solver values):
-%   discharge_time_min = t_d(end)/60  ACTUAL seconds elapsed during eclipse
-%   chargetime_min     = t_c(end)/60  ACTUAL seconds elapsed during sunlight
-%
-% IR formula (v3 update):
-%   IR = (R0/SOH)*(1+k_R*(1-SOH))*Arrhenius(T)
-%   Calibrated: IR_initial=72.934 mΩ, IR_final=99.806 mΩ at T_avg=18.7°C
-% =========================================================================
 
 if nargin < 4 || isempty(cycle_num)
     cycle_num = 1;

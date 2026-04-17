@@ -1,17 +1,5 @@
 function [dxdt, V_term, IR] = cubesat_ode_ch(t, x, p)
 % =========================================================================
-% cubesat_ode_ch.m  —  v3
-%
-% ODE for CHARGE phase (sunlight)
-% State: x = [SOC ; T (K) ; SOH]
-%
-% v3 change: IR formula updated to include resistance growth with degradation
-%   IR = (R0/SOH) * (1 + k_R*(1-SOH)) * Arrhenius(T)
-%
-% Thermal model (VACUUM, no convection):
-%   dT/dt = (Q_joule + Q_cond + P_heater − Q_rad) / (m·Cp)
-%   Q_cond = G*(T_struct_sun - T)  → heat flows IN from warm structure
-% =========================================================================
 
 % --- State bounds ---
 SOC = max(p.SOC_min,          min(p.SOC_max,          x(1)));

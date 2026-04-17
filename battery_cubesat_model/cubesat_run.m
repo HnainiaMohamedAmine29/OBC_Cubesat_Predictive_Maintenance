@@ -1,31 +1,5 @@
 %% cubesat_run.m  —  v3
 % =========================================================================
-% Battery Cycle Dataset Generator  —  v3  (reference-calibrated)
-%
-% Validation targets from reference document:
-%   Total cycles        : 3000         (normal fault completes full run)
-%   Initial SOH         : 100.000 %
-%   Final SOH           : 88.714  %   (α=0.02085, 3000 normal cycles)
-%   Initial IR          : 72.934  mΩ  (R0=55.20 mΩ at T=18.7°C)
-%   Final IR            : 99.806  mΩ  (growth model: k_R=1.899)
-%   Initial QD          : 4.035   Ah  (Q_nom=4.035 Ah, QD=SOH×Q_nom)
-%   Final QD            : 3.580   Ah
-%   QC range            : [3.5, 4.0] Ah  (QC=SOH×Q_nom×η)
-%   Avg Tavg            : ≈ 18.7  °C
-%   Avg chargetime      : ≈ 55    min  (I_ch=I_dch×35/55=1.2155 A)
-%   Avg discharge_time  : ≈ 35    min
-%
-% v3 changes summary
-% -----------------------------------------------------------------------
-%  BUG 1 (v2 fix, kept): SOC_end = SOC after DISCHARGE, not after charge.
-%  BUG 2 (v2 fix, kept): eclipse drawn per cycle → discharge_time varies.
-%  BUG 3 (v2 fix, kept): I_ch calibrated so chargetime ≈ 55 min.
-%  NEW v3: QD = SOH×Q_nom, QC = SOH×Q_nom×η  (capacity features).
-%  NEW v3: R0=0.05520 Ω, k_R=1.899 → IR matches 72.934→99.806 mΩ.
-%  NEW v3: alpha=0.02085 → SOH 100%→88.714% in 3000 normal cycles.
-%  NEW v3: Battery IDs generic (no product/platform names in dataset).
-%  NEW v3: Normal-fault battery guaranteed to complete all 3000 cycles.
-% =========================================================================
 
 clear; close all; clc
 
