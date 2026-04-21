@@ -3,7 +3,7 @@ function p = cubesat_params()
 % -------------------------------------------------------------------------
 % Battery Pack 
 % -------------------------------------------------------------------------
-p.Q_nom      = 3.40;        % Ah   pack rated capacity at BOL
+p.Q_nom      = 3.350;        % Ah   pack rated capacity at BOL
 p.V_pack_min = 6.20;        % V
 p.V_pack_max = 8.40;        % V
 p.V_pack_mid = 7.20;        % V
