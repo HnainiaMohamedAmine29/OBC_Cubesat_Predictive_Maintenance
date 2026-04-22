@@ -99,7 +99,6 @@ row.chargetime_min     = actual_ch_s / 60;         % ACTUAL solver time
 row.discharge_time_min = actual_dch_s / 60;        % ACTUAL solver time
 row.x_next             = x_next;
 row.SOH_end            = x_next(3);
-row.fault_type         = fault_type;
 row.T_amb_K            = p.T_amb_eclipse;
 
 end
