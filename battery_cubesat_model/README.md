@@ -90,7 +90,7 @@ The mission is a sun‑synchronous LEO with a 90‑minute period.
 | Parameter              | Value                     |
 |------------------------|---------------------------|
 | Eclipse duration       | ~N(35,1) min, ∈ [32,38]   |
-| Sunlight duration      | fixed 55 min              |
+| Sunlight duration      | ∈ [55,54]                 |
 | Discharge current      | 1.91 A                    |
 | Charge current         | 1.2155 A                  |
 | Nominal capacity (BOL) | 4.035 Ah                  |
