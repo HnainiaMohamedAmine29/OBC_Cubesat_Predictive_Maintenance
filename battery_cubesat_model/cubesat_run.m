@@ -96,16 +96,7 @@ for batt_idx = 1:n_batt
         [p_cycle, fault_state] = inject_fault(p, selected_fault, fault_state, cycle);
 
         % =================================================================
-        % PER-CYCLE ORBIT TIMES
-        %
-        % Eclipse ~ N(35, 1) min, clipped [32, 38] min
-        %   → discharge_time varies; QD/QC unchanged (they use SOH, not t)
-        % Sunlight = 55 min (fixed) so chargetime ≈ 55 min on average
-        %
-        % Fault modifiers (physical rationale):
-        %   high_temperature → +2 min sunlight exposure (cooling degraded)
-        %   low_temperature  → +2 min eclipse cold soak (heater failed)
-        % =================================================================
+        
         eclipse_mean  = 35.0;
         if strcmp(selected_fault, 'high_temperature')
             eclipse_mean = eclipse_mean - 1.0;  % slightly shorter eclipse
@@ -113,7 +104,7 @@ for batt_idx = 1:n_batt
             eclipse_mean = eclipse_mean + 2.0;  % longer cold eclipse
         end
         eclipse_min  = max(32.0, min(38.0, eclipse_mean + 1.0 * randn()));
-        sunlight_min = 55.0;   % fixed — gives chargetime ≈ 55 min avg
+        sunlight_min = max(53.0, min(57.0, 55.0 + 0.8  * randn()));
 
         p_cycle.eclipse_time  = eclipse_min  * 60;
         p_cycle.sunlight_time = sunlight_min * 60;

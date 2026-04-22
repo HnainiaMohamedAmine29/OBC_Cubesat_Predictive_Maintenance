@@ -61,7 +61,7 @@ for batt_idx = 1:n_batt
         % PER-CYCLE ORBIT TIMES (unchanged from uploaded version)
         % =================================================================
         eclipse_min  = max(32.0, min(38.0, 35.0 + 1.0 * randn()));
-        sunlight_min = 55.0;
+        sunlight_min = max(53.0, min(57.0, 55.0 + 0.8  * randn()));
 
         p_cycle = p;   % no fault modification — pure copy of base params
         p_cycle.eclipse_time  = eclipse_min  * 60;

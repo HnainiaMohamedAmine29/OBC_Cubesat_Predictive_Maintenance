@@ -63,9 +63,13 @@ for batt_idx = 1:n_batt
 
         % =================================================================
         % PER-CYCLE ORBIT TIMES
+        % eclipse_min : clipped Gaussian N(35, 1²) in [32, 38] min  — unchanged
+        % sunlight_min: clipped Gaussian N(55, 0.8²) in [53, 57] min — CHANGED
+        %               (was hardcoded 55.0; now varies each cycle)
+        %               I_ch is NOT recomputed; only the available window varies.
         % =================================================================
-        eclipse_min  = max(32.0, min(38.0, 35.0 + 1.0 * randn()));
-        sunlight_min = 55.0;
+        eclipse_min  = max(32.0, min(38.0, 35.0 + 1.0  * randn()));
+        sunlight_min = max(53.0, min(57.0, 55.0 + 0.8  * randn()));  % <-- CHANGED
 
         p_cycle = p;
         p_cycle.eclipse_time  = eclipse_min  * 60;
@@ -110,7 +114,7 @@ for batt_idx = 1:n_batt
             fprintf(['  Cycle %4d/%d | SOH=%.4f | ' ...
                      'SOC %.3f->%.3f (DoD=%.1f%%) | ' ...
                      'QD=%.3fAh QC=%.3fAh | ' ...
-                     'IR=%.1fmO | t_d=%.1fm t_c=%.1fm\n'], ...
+                     'IR=%.1fmO | t_d=%.1fm t_c=%.3fm\n'], ...
                 cycle, n, sohs(cycle), ...
                 SOC_starts(cycle), SOC_ends(cycle), DoDs(cycle)*100, ...
                 QDs(cycle), QCs(cycle), IRs(cycle)*1000, ...
@@ -119,9 +123,6 @@ for batt_idx = 1:n_batt
 
         % =================================================================
         % SOH END-OF-LIFE STOP
-        % When SOH falls below p.SOH_eol the simulation terminates.
-        % Below SOH_eol the pack can no longer sustain the mission power
-        % budget through a full eclipse (IEC 62660-1 criterion).
         % =================================================================
         if sohs(cycle) < p.SOH_eol
             fprintf('\n  *** SOH = %.4f  <  SOH_eol = %.2f ***\n', ...
@@ -160,9 +161,6 @@ for batt_idx = 1:n_batt
 
     % =====================================================================
     % VALIDATION GATES
-    % NCR18650B: Q_nom=3.40Ah, SOH_min=0.70
-    %   QD range: [0.70*3.40, 3.40] = [2.38, 3.40] Ah
-    %   QC range: [0.70*3.40*0.98, 3.40*0.98] = [2.33, 3.33] Ah
     % =====================================================================
     fprintf('\n  Validation:\n');
     fprintf('    Cycles completed         : %d/%d\n', n, N_max);
@@ -181,6 +179,8 @@ for batt_idx = 1:n_batt
         sum(V_means >= p.V_pack_min & V_means <= p.V_pack_max), n);
     fprintf('    IR in [0, 300] mOhm      : %d/%d\n', ...
         sum(IRs*1000 >= 0 & IRs*1000 <= 300), n);
+    fprintf('    chargetime range (min)   : %.3f - %.3f\n', ...
+        min(chargetimes), max(chargetimes));
 
     % =====================================================================
     % EXPORT TABLE
@@ -227,9 +227,9 @@ for batt_idx = 1:n_batt
     fprintf('    SOC_end   : %.4f - %.4f\n', min(SOC_ends),   max(SOC_ends));
     fprintf('    DoD       : %.1f%% - %.1f%%  mean=%.1f%%\n', ...
         min(DoDs)*100, max(DoDs)*100, mean(DoDs)*100);
-    fprintf('    discharge_time : %.1f - %.1f min  mean=%.3f\n', ...
+    fprintf('    discharge_time : %.3f - %.3f min  mean=%.3f\n', ...
         min(discharge_times), max(discharge_times), mean(discharge_times));
-    fprintf('    chargetime     : %.1f - %.1f min  mean=%.3f\n', ...
+    fprintf('    chargetime     : %.3f - %.3f min  mean=%.3f\n', ...
         min(chargetimes), max(chargetimes), mean(chargetimes));
     fprintf('    Tavg  : %.3f C   [%.1f, %.1f]\n', ...
         mean(Tavgs), min(Tmins), max(Tmaxs));
