@@ -1,0 +1,17 @@
+Feature,N,D'Agostino p,Normal (p>0.05),Anderson stat,Anderson 5%,AD pass
+SOC Start,6808,0,No,43.4325,0.786,No
+SOC End,6808,0,No,35.6836,0.786,No
+Depth of Discharge,6808,0,No,40.0862,0.786,No
+Internal Resistance (O),6808,0,No,35.6201,0.786,No
+Discharge Capacity (Ah),6808,0,No,57.4521,0.786,No
+Charge Capacity (Ah),6808,0,No,57.4521,0.786,No
+Mean Voltage (V),6808,0,No,24.774,0.786,No
+Min Voltage (V),6808,0,No,23.0453,0.786,No
+Max Voltage (V),6808,0,No,34.6906,0.786,No
+Avg Temperature (°C),6808,0,No,462.7088,0.786,No
+Min Temperature (°C),6808,0,No,754.1015,0.786,No
+Max Temperature (°C),6808,0,No,1.8204,0.786,No
+Charge Time (min),6808,0,No,2.7106,0.786,No
+Discharge Time (min),6808,0.83544,Yes,0.3902,0.786,Yes
+State of Health,6808,0,No,57.4521,0.786,No
+Ambient Temperature (K),6808,0,No,898.0744,0.786,No
