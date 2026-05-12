@@ -1,0 +1,7 @@
+window_size   = 30
+step_size     = 1
+horizon       = 1
+n_features    = 20
+features      = ['V_mean_V', 'V_spread', 'V_mean_rolling', 'V_mean_lag_1', 'V_min_fade', 'Tavg_C', 'thermal_range', 'delta_T_ambient', 'cold_cycle_count', 'Tavg_rolling', 'eclipse_flag', 'QD_Ah', 'coulombic_eff', 'discharge_C_rate', 'capacity_retention', 'QD_rolling', 'cycle', 'cumul_Ah', 'SOH_lag_1', 'QD_diff']
+X_train_shape = [5415, 30, 20]
+X_test_shape  = [1332, 30, 20]
