@@ -1,111 +1,115 @@
-function cubesat_eps_main(N_max_in)
+%% ================================================
+%% CubeSat Real-Time Simulation + LSTM SOH Prediction
+%% Raw data → compute_features.m → LSTM
+%% ================================================
 
-clear; clc; close all
+clear; close all; clc
 
-%% ── PARAMÈTRES ─────────────────────────────────────────────
-if nargin < 1, N_max_in = 7000; end
-
-N_MAX         = N_max_in;
-MIN_CYCLES    = 100;
-
-rng(42);
 p = cubesat_params();
-p.SOH_eol = 0.70;
 
-%% ── PYTHON INIT (IMPORTANT) ────────────────────────────────
-pyenv("Version","C:\Users\Amine\Desktop\files_4\tf_env\Scripts\python.exe");
-py.importlib.import_module("lstm_core");
+fprintf('=== CubeSat Real-Time LSTM SOH Prediction ===\n');
+fprintf('Raw features → Feature Engineering → LSTM\n\n');
 
-%% ── PRÉALLOCATION ───────────────────────────────────────────
-cycles_log   = zeros(N_MAX,1);
-soh_true_log = zeros(N_MAX,1);
-soh_pred_log = nan(N_MAX,1);
+% Initialize Python LSTM Predictor
+pyenv;
+predictor = py.importlib.import_module('lstm_core');
+py_predictor = predictor.CubeSatSOHPredictor();
 
-%% ── ÉTAT INITIAL ────────────────────────────────────────────
+% Preallocate
+n_max = 7000;
+cycleNums = (1:n_max)';
+
+SOH_true = zeros(n_max,1);
+SOH_lstm = zeros(n_max,1);
+
+% History for feature engineering (raw data)
+history = struct( ...
+    'V_mean_V', [], ...
+    'V_min_V',  [], ...
+    'V_max_V',  [], ...
+    'Tavg_C',   [], ...
+    'Tmin_C',   [], ...
+    'Tmax_C',   [], ...
+    'QD_Ah',    [], ...
+    'QC_Ah',    [], ...
+    'T_amb_K',  [], ...
+    'discharge_time_min', [], ...
+    'SOH_lag_1', [] ...
+);
+
 x = [0.99; p.T_operating_min + 5.0; 1.0];
+soh_prev = 1.0;
 
-fprintf('\n=== CubeSat EPS + LSTM REAL-TIME (NO SERVER) ===\n');
-fprintf('Cycle | SOH_true | SOH_pred | SOC | Tavg | IR\n');
-fprintf('------------------------------------------------\n');
+fprintf('Simulation started...\n');
 
-actual_n = 0;
-
-%% ── LOOP PRINCIPALE ────────────────────────────────────────
-for k = 1:N_MAX
-
-    %% 1. Simulation batterie
-    row = simulate_cycle(x, p, k);
-
-    actual_n = k;
-
-    cycles_log(k)   = k;
-    soh_true_log(k) = row.SOH_end;
-
-    %% 2. UPDATE STATE
+for cycle = 1:n_max
+    % === 1. Simulate one cycle (raw features) ===
+    row = simulate_cycle(x, p, cycle);
+    
+    % Store true SOH
+    SOH_true(cycle) = row.SOH_end;
+    
+    % === 2. Append raw data to history ===
+    history.V_mean_V(end+1)      = row.V_mean_V;
+    history.V_min_V(end+1)       = row.V_min_V;
+    history.V_max_V(end+1)       = row.V_max_V;
+    history.Tavg_C(end+1)        = row.Tavg_C;
+    history.Tmin_C(end+1)        = row.Tmin_C;
+    history.Tmax_C(end+1)        = row.Tmax_C;
+    history.QD_Ah(end+1)         = row.QD_Ah;
+    history.QC_Ah(end+1)         = row.QC_Ah;
+    history.T_amb_K(end+1)       = row.T_amb_K;
+    history.discharge_time_min(end+1) = row.discharge_time_min;
+    history.SOH_lag_1(end+1)     = soh_prev;
+    
     x = row.x_next;
-
-    %% 3. REAL TIME LSTM (après MIN_CYCLES)
-    if k >= MIN_CYCLES
-
-        try
-            data = py.dict(pyargs( ...
-                'cycle', k, ...
-                'V_mean_V', row.V_mean_V, ...
-                'V_spread', row.V_max_V - row.V_min_V, ...
-                'V_mean_rolling', row.V_mean_V, ...
-                'V_mean_lag_1', row.V_mean_V, ...
-                'V_min_fade', row.V_min_V, ...
-                'Tavg_C', row.Tavg_C, ...
-                'thermal_range', row.Tmax_C - row.Tmin_C, ...
-                'delta_T_ambient', row.Tavg_C - (p.T_operating_min), ...
-                'cold_cycle_count', 0, ...
-                'Tavg_rolling', row.Tavg_C, ...
-                'eclipse_flag', 0, ...
-                'QD_Ah', row.QD_Ah, ...
-                'coulombic_eff', row.QD_Ah / max(row.QC_Ah,1e-6), ...
-                'discharge_C_rate', row.QD_Ah / max(row.discharge_time_min/60,1e-6), ...
-                'capacity_retention', row.QD_Ah / max(row.QD_Ah,1e-6), ...
-                'QD_rolling', row.QD_Ah, ...
-                'cumul_Ah', row.QD_Ah * k, ...
-                'SOH_lag_1', row.SOH_end, ...
-                'QD_diff', 0 ...
-            ));
-
-            soh_pred = py.lstm_core.predict(data);
-            soh_pred_log(k) = double(soh_pred);
-
-        catch ME
-            warning("LSTM error cycle %d: %s", k, ME.message);
-        end
+    
+    % === 3. Feature Engineering using dedicated function ===
+    feat_struct = compute_features(cycle, row, history);
+    feature_dict = py.dict(feat_struct);
+    
+    % === 4. LSTM Prediction ===
+    if cycle >= 10
+        SOH_lstm(cycle) = double(py_predictor.predict_soh(feature_dict, soh_prev));
+        soh_prev = SOH_lstm(cycle);
+        history.SOH_lag_1(end) = SOH_lstm(cycle);   % recursive
+    else
+        SOH_lstm(cycle) = SOH_true(cycle);
     end
-
-    %% 4. DISPLAY
-    if mod(k,50)==0 || k<=5
-        pred_str = " --- ";
-        if ~isnan(soh_pred_log(k))
-            pred_str = sprintf(" %.4f ", soh_pred_log(k));
-        end
-
-        fprintf('%5d | %.4f |%s| %.4f | %.2f | %.4f\n', ...
-            k, row.SOH_end, pred_str, row.SOC_end, row.Tavg_C, row.IR_ohm);
+    
+    % Progress
+    if mod(cycle, 100) == 0 || cycle == 1 || SOH_true(cycle) < 0.72
+        fprintf('Cycle %4d | True SOH: %.4f | LSTM SOH: %.4f | QD: %.3f Ah\n', ...
+            cycle, SOH_true(cycle), SOH_lstm(cycle), row.QD_Ah);
     end
-
-    %% 5. STOP CONDITION
-    if row.SOH_end < p.SOH_eol
-        fprintf("\nBATTERIE MORTE cycle %d\n", k);
+    
+    % Stop at EOL
+    if SOH_true(cycle) < 0.70
+        fprintf('\n🔴 END-OF-LIFE REACHED at cycle %d (SOH = %.4f)\n', cycle, SOH_true(cycle));
         break;
     end
 end
 
-n = actual_n;
+% Trim data
+idx = 1:cycle;
+cycleNums = cycleNums(idx);
+SOH_true = SOH_true(idx);
+SOH_lstm = SOH_lstm(idx);
 
-%% ── PLOT SIMPLE ─────────────────────────────────────────────
-figure;
-plot(soh_true_log,'b','LineWidth',1.5); hold on;
-plot(soh_pred_log,'r--','LineWidth',1.5);
-legend("SOH vrai","SOH LSTM");
-xlabel("Cycle"); ylabel("SOH");
-title("Real-Time Co-Simulation MATLAB + Python (NO SERVER)");
+% Save results
+T_result = table(cycleNums, SOH_true, SOH_lstm, ...
+    'VariableNames', {'cycle','SOH_true','SOH_lstm'});
+writetable(T_result, 'CubeSat_LSTM_Results.csv');
+fprintf('✅ Results saved to CubeSat_LSTM_Results.csv\n');
+
+% Plot
+figure('Position',[100 100 1000 600]);
+plot(cycleNums, SOH_true, 'b-', 'LineWidth', 2.5); hold on;
+plot(cycleNums, SOH_lstm, 'r--', 'LineWidth', 1.8);
+yline(0.70, 'k--', 'EOL Threshold', 'LineWidth', 1.5);
+legend('True SOH (Physics)', 'LSTM Predicted SOH', 'Location','best');
+xlabel('Cycle Number'); ylabel('State of Health');
+title('CubeSat Battery - Real-Time LSTM SOH Prediction');
 grid on;
 
-end
+fprintf('\n🎉 Simulation completed in %d cycles!\n', cycle);
