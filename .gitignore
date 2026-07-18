@@ -1,0 +1,139 @@
+# =============================================================================
+# PYTHON
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+venv/
+ENV/
+env/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+
+# =============================================================================
+# JUPYTER NOTEBOOK
+# =============================================================================
+.ipynb_checkpoints
+*.ipynb_checkpoints
+.jupyter/
+*checkpoint.ipynb
+
+# =============================================================================
+# MATLAB
+# =============================================================================
+*.asv
+*.m~
+*.mex*
+*.o
+*.mexglx
+*.mexmaci64
+*.mexw64
+slprj/
+*.slxc
+
+# =============================================================================
+# DATA & OUTPUTS (Large files - don't commit)
+# =============================================================================
+*.csv
+*.xlsx
+*.xls
+battery_dataset*.csv
+battery_dataset_normal*.csv
+*.mat
+*.npy
+*.npz
+processed/
+outputs/
+results/
+logs/
+datasets/
+data/
+*.pkl
+*.pickle
+scaler.pkl
+model_weights/
+checkpoints/
+
+# =============================================================================
+# MODELS & WEIGHTS
+# =============================================================================
+*.h5
+*.pb
+*.pt
+*.pth
+*.onnx
+*.joblib
+models/
+saved_models/
+
+# =============================================================================
+# IDE & EDITOR
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# =============================================================================
+# OS FILES
+# =============================================================================
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.local
+
+# =============================================================================
+# PROJECT-SPECIFIC
+# =============================================================================
+# Exclude simulation outputs but keep scripts
+simulation_output/
+temp/
+debug/
+test_output/
+
+# Exclude large data files
+*.tar.gz
+*.zip
+
+# =============================================================================
+# DOCUMENTATION BUILD
+# =============================================================================
+docs/_build/
+site/
+
+# =============================================================================
+# PYTHON ENVIRONMENTS
+# =============================================================================
+.venv/
+venv/
+env/
+ENV/
