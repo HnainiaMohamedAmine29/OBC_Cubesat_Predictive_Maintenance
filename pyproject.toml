@@ -1,0 +1,93 @@
+# Project Configuration File
+# ============================================================================
+# OBC CubeSat Predictive Maintenance: Battery SOH Prediction
+# ============================================================================
+
+[project]
+name = OBC CubeSat Predictive Maintenance
+version = 1.0.0
+description = Battery State of Health (SOH) prediction for CubeSats in LEO
+author = Hnainia Mohamed Amine
+python_requires = >=3.8
+
+[data]
+# Primary data source from battery_model_Normal_conditions
+source = battery_model_Normal_conditions
+data_format = CSV
+cycles_total = 7000
+soh_initial = 99.0
+soh_eol = 70.0
+
+[simulation]
+# MATLAB Simulation Parameters
+orbit_period_min = 90
+eclipse_duration_min = 35
+sunlight_duration_min = 55
+discharge_current_A = 1.91
+charge_current_A = 1.2155
+nominal_capacity_Ah = 4.035
+coulombic_efficiency = 0.98
+
+# Battery Parameters
+R0_mOhm = 15
+k_R = 1.899
+alpha = 0.02085
+Ea_J_mol = 32000
+T_ref_K = 298.15
+T_ref_C = 25.0
+
+# Thermal
+T_amb_sunlight_C = 35
+T_amb_eclipse_C = -10
+mass_kg = 0.350
+Cp_J_kg_K = 1050
+
+[pipeline]
+# Data Processing Pipeline Settings
+split_method = temporal
+train_ratio = 0.70
+random_state = 42
+scaler_type = standard
+rolling_window_cycles = 5
+
+[features]
+# Feature Engineering
+total_features = 20
+window_size_cycles = 30
+step_size = 1
+horizon_cycles = 1
+
+[ml_model]
+# LSTM Model Architecture
+architecture = LSTM
+lstm_units = 64
+dropout_rate = 0.2
+batch_size = 32
+epochs = 100
+early_stopping_patience = 10
+validation_split = 0.2
+learning_rate = 0.001
+optimizer = adam
+loss_function = mse
+metric = mae
+
+[validation]
+# Performance Targets
+rmse_target = 0.02
+mae_target = 0.015
+r2_target = 0.95
+inference_latency_ms = 10
+
+[paths]
+data_input = battery_dataset_normal.csv
+output_dir = processed
+features_file = features.csv
+train_file = train.csv
+test_file = test.csv
+scaler_file = scaler.pkl
+model_file = lstm_soh_model.h5
+
+[logging]
+level = info
+save_logs = true
+log_dir = logs
