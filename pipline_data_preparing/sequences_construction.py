@@ -10,22 +10,18 @@ import pandas as pd
 from config import (
     CYCLE_COL, TARGET_COL,
     FILE_TRAIN_NORM, FILE_TEST_NORM,
-    OUTPUT_DIR
+    OUTPUT_DIR,
+    WINDOW_SIZE, STEP_SIZE, HORIZON,
+    FILE_X_TRAIN, FILE_Y_TRAIN, FILE_X_TEST, FILE_Y_TEST, FILE_SEQ_INFO,
 )
 from feature_engineering import FEATURE_COLS
 
 # =============================================================================
 # PARAMÈTRES LSTM
+# WINDOW_SIZE / STEP_SIZE / HORIZON viennent maintenant de config.py, qui est
+# la seule source de vérité (alignée sur prediction_soh_lstm_target(_SOH).ipynb).
+# Ne les redéfinissez pas ici — modifiez config.py pour changer ces valeurs.
 # =============================================================================
-WINDOW_SIZE    = 30    # Longueur de séquence (cycles passés utilisés)
-STEP_SIZE      = 1     # Pas du sliding window (1 = dense, N = décimé)
-HORIZON        = 1     # Prédire SOH à t+HORIZON (1 = prochain cycle)
-
-FILE_X_TRAIN   = os.path.join(OUTPUT_DIR, "X_train.npy")
-FILE_Y_TRAIN   = os.path.join(OUTPUT_DIR, "y_train.npy")
-FILE_X_TEST    = os.path.join(OUTPUT_DIR, "X_test.npy")
-FILE_Y_TEST    = os.path.join(OUTPUT_DIR, "y_test.npy")
-FILE_SEQ_INFO  = os.path.join(OUTPUT_DIR, "sequences_info.txt")
 
 
 # =============================================================================

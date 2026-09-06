@@ -8,7 +8,7 @@ import pandas as pd
 import numpy as np
 from config import (
     DATA_PATH, ID_COL, CYCLE_COL, TARGET_COL,
-    ROLLING_WINDOW, COLD_THRESHOLD_C, ECLIPSE_THRESHOLD_K,
+    ROLLING_WINDOW, COLD_THRESHOLD_C, COLD_CYCLE_THRESHOLD_C, ECLIPSE_THRESHOLD_K,
     OUTPUT_DIR, FILE_FEATURES
 )
 
@@ -53,12 +53,20 @@ def build_temperature_features(df: pd.DataFrame, grp) -> pd.DataFrame:
     # 7. Amplitude thermique intra-cycle (stress mécanique + SEI)
     df["thermal_range"] = df["Tmax_C"] - df["Tmin_C"]
 
-    # 8. Auto-échauffement au-dessus de l'ambiant (proxy IR interne)
-    df["delta_T_ambient"] = df["Tavg_C"] - (df["T_amb_K"] - 273.15)
+    # 8. Variation de la température ambiante d'un cycle à l'autre
+    #    (proxy de transition orbitale éclipse <-> soleil).
+    #    NOTE: aligné sur engineer_features() du notebook, qui calcule un
+    #    diff() de T_amb_K — PAS un écart de self-heating comme dans une
+    #    version antérieure de ce script (Tavg_C - T_amb_K_en_celsius).
+    #    Si vous voulez un proxy de résistance interne (self-heating),
+    #    utilisez plutôt Tavg_C - (T_amb_K - 273.15) et renommez la colonne.
+    df["delta_T_ambient"] = grp["T_amb_K"].transform(lambda x: x.diff())
 
     # 9. Compteur cumulé de cycles froids (risque lithium plating LEO)
-    df["cold_cycle_count"] = grp["Tmin_C"].transform(
-        lambda x: (x < COLD_THRESHOLD_C).cumsum()
+    #    NOTE: aligné sur le notebook, qui teste Tavg_C < COLD_CYCLE_THRESHOLD_C
+    #    (5°C par défaut) — pas Tmin_C < COLD_THRESHOLD_C (-10°C).
+    df["cold_cycle_count"] = grp["Tavg_C"].transform(
+        lambda x: (x < COLD_CYCLE_THRESHOLD_C).cumsum()
     )
 
     # 10. Régime thermique moyen lissé
@@ -82,11 +90,21 @@ def build_current_features(df: pd.DataFrame, grp) -> pd.DataFrame:
     df["QD_Ah"] = df["QD_Ah"]
 
     # 13. Efficacité coulombique par cycle
-    df["coulombic_eff"] = df["QD_Ah"] / df["QC_Ah"].replace(0, np.nan)
+    #     NOTE: aligné sur le notebook — QC_Ah / QD_Ah (charge récupérée sur
+    #     décharge délivrée), pas l'inverse (QD_Ah / QC_Ah) utilisé avant.
+    df["coulombic_eff"] = df["QC_Ah"] / df["QD_Ah"].replace(0, np.nan)
 
     # 14. C-rate de décharge (régime de sollicitation)
+    #     NOTE: le notebook utilise DoD / (discharge_time_min / 60). Si la
+    #     colonne "DoD" n'existe pas dans le CSV brut, on retombe sur
+    #     QD_Ah / Q_NOM comme proxy du depth-of-discharge normalisé.
     discharge_h = df["discharge_time_min"] / 60.0
-    df["discharge_C_rate"] = df["QD_Ah"] / discharge_h.replace(0, np.nan)
+    if "DoD" in df.columns:
+        dod = df["DoD"]
+    else:
+        from config import Q_NOM
+        dod = df["QD_Ah"] / Q_NOM
+    df["discharge_C_rate"] = dod / discharge_h.replace(0, np.nan)
 
     # 15. Rétention de capacité normalisée depuis le cycle 1
     df["capacity_retention"] = grp["QD_Ah"].transform(

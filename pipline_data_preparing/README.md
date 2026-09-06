@@ -12,12 +12,64 @@ seul le fichier `config.py` est à adapter à la mission. Les autres scripts (`f
 
 | Fichier                      | Rôle |
 |------------------------------|------|
-| `config.py`                  | **Point central** : chemins, paramètres physiques, méthode de split, type de normalisation. À modifier pour chaque mission. |
+| `config.py`                  | **Point central** : chemins, paramètres physiques, méthode de split, type de normalisation, hyperparamètres du modèle. À modifier pour chaque mission. |
 | `feature_engineering.py`     | Construction des 20 features à partir des données brutes. |
 | `split.py`                   | Découpage temporel (ou aléatoire) en ensembles d’entraînement et de test. |
 | `normalize.py`               | Normalisation des features (StandardScaler ou MinMaxScaler) *apprise sur l’entraînement uniquement*. |
 | `sequences_construction.py`  | Création des séquences glissantes `(fenêtre, features)` pour le LSTM. |
+| `model.py`                   | **Nouveau.** Architecture LSTM + Self-Attention (portée depuis `prediction_soh_lstm_target(_SOH).ipynb`), entraînement et évaluation. |
 | `README.md`                  | Ce document. |
+
+---
+
+## Adaptation au notebook `prediction_soh_lstm_target(_SOH).ipynb`
+
+Ce pipeline a été mis à jour pour rester cohérent avec le notebook Colab qui
+contient l'architecture du modèle. Changements principaux :
+
+1. **Bug bloquant corrigé dans `config.py`** : `feature_engineering.py`,
+   `split.py`, `normalize.py` et `sequences_construction.py` importaient des
+   noms (`FILE_FEATURES`, `FILE_TRAIN`, `FILE_TEST`, `FILE_TRAIN_NORM`,
+   `FILE_TEST_NORM`, `FILE_SCALER`, `FILE_SCALER_COLS`) qui n'existaient pas
+   dans `config.py` (qui définissait `FEATURES_PATH`, `TRAIN_PATH`, etc.).
+   Le pipeline ne pouvait donc pas s'exécuter. Ces noms sont maintenant
+   définis une seule fois dans `config.py` (les anciens noms restent comme
+   alias).
+2. **Paramètres alignés sur le notebook** : `ROLLING_WINDOW=10` (était 5),
+   `TRAIN_RATIO=0.80` (était 0.70), `STEP_SIZE=3` (était 1). `WINDOW_SIZE`
+   et `HORIZON` étaient déjà cohérents (30 et 1).
+   `sequences_construction.py` importe désormais ces trois valeurs depuis
+   `config.py` au lieu de les redéfinir localement, pour qu'elles ne
+   puissent plus dériver du notebook sans que ce soit visible.
+3. **Formules de features alignées** dans `feature_engineering.py` :
+   - `coulombic_eff` = `QC_Ah / QD_Ah` (était l'inverse).
+   - `discharge_C_rate` = `DoD / (discharge_time_min/60)` avec repli sur
+     `QD_Ah / Q_NOM` si la colonne `DoD` n'est pas présente dans le CSV brut.
+   - `cold_cycle_count` teste `Tavg_C < COLD_CYCLE_THRESHOLD_C` (5°C, était
+     `Tmin_C < COLD_THRESHOLD_C` à -10°C).
+   - `delta_T_ambient` = `diff(T_amb_K)` d'un cycle à l'autre (était un écart
+     de self-heating `Tavg_C - T_amb_K_en_°C`). **Attention** : ce sont deux
+     features physiquement différentes ; si vous préférez le proxy de
+     self-heating, gardez l'ancienne formule et renommez la colonne pour
+     éviter toute confusion avec le nom utilisé dans le notebook.
+4. **`model.py` ajouté** : porte `build_model_v2()` du notebook (LSTM 128 →
+   LSTM 64 → self-attention 4 têtes → Dense 64 → Dense 1) sans dépendance à
+   Colab/Google Drive. Il lit `X_train.npy` / `y_train.npy` / `X_test.npy` /
+   `y_test.npy` produits par `sequences_construction.py`, et tous ses
+   hyperparamètres (unités LSTM, dropout, L2, learning rate, Huber delta,
+   patience, etc.) viennent de `config.py`.
+5. **Activation de sortie** : le notebook contient un commentaire qui
+   recommande une sortie `linear` (le gradient de `sigmoid` est trop plat
+   près de SOH=1.0), mais le code du notebook construit tout de même la
+   couche avec `activation='sigmoid'`. `config.OUTPUT_ACTIVATION` reprend
+   `"sigmoid"` pour rester fidèle au code réellement exécuté — changez-le en
+   `"linear"` si vous voulez tester le correctif décrit dans les commentaires.
+
+L'ensemble `feature_engineering.py → split.py → normalize.py →
+sequences_construction.py` a été testé de bout en bout sur un jeu de
+données synthétique respectant le schéma attendu ; `model.py` a été
+vérifié par compilation syntaxique (TensorFlow n'était pas disponible dans
+l'environnement de test).
 
 ---
 
@@ -87,6 +139,13 @@ Sauvegarde également le scaler pour une utilisation ultérieure (inférence emb
 
 ## Étape 4 – Construction des séquences LSTM
 Crée les tenseurs (N, fenêtre, features) pour le LSTM et les sauvegarde au format .npy.
+
+## Étape 5 – Entraînement du modèle (`model.py`)
+Construit le modèle LSTM + self-attention (`build_model_v2`), l'entraîne sur
+`X_train.npy` / `y_train.npy`, l'évalue sur `X_test.npy` / `y_test.npy`, puis
+sauvegarde `cubesat_soh_lstm.keras`, `metrics.csv` et `training_history.csv`
+dans `processed/`. Nécessite `tensorflow` en plus des dépendances listées
+ci-dessus.
 
 
 Les paramètres du sliding window (taille de fenêtre, pas, horizon de prédiction) sont ajustables directement en haut de sequences_construction.py.

@@ -46,7 +46,12 @@ T_REF_C = 25.0                  # °C
 # ============================================================================
 
 # Rolling window for moving average calculations
-ROLLING_WINDOW = 5              # cycles — window size for smoothing trends
+# Aligned with prediction_soh_lstm_target(_SOH).ipynb (ROLLING_W = 10)
+ROLLING_WINDOW = 10             # cycles — window size for smoothing trends
+
+# Threshold used by cold_cycle_count in feature_engineering.py.
+# The notebook flags a cycle as "cold" when Tavg_C < 5°C (not Tmin_C < COLD_THRESHOLD_C).
+COLD_CYCLE_THRESHOLD_C = 5
 
 # Aging rate baseline (from cubesat_params.m)
 ALPHA = 0.02085                 # — base aging rate coefficient
@@ -62,8 +67,9 @@ R_GAS = 8.314                   # J/(mol·K) — gas constant
 # Temporal: Earlier cycles → training, Later cycles → testing
 SPLIT_METHOD = "temporal"
 
-# Proportion of data for training (0.7 = 70% train, 30% test)
-TRAIN_RATIO = 0.70
+# Proportion of data for training
+# Aligned with prediction_soh_lstm_target(_SOH).ipynb (TRAIN_FRAC = 0.80)
+TRAIN_RATIO = 0.80
 
 # Random state for reproducibility (if using random split)
 RANDOM_STATE = 42
@@ -79,7 +85,7 @@ SCALER_TYPE = "standard"        # Recommended: "standard" for LSTM
 COLS_NO_SCALE = ["battery_id", "cycle", "eclipse_flag"]
 
 # Save scaler for later inference (embedded deployment)
-SCALER_PATH = os.path.join(OUTPUT_DIR, "scaler.pkl")
+# (actual path is defined once, below, as FILE_SCALER / SCALER_PATH alias)
 
 # ============================================================================
 # 7. LSTM SEQUENCE CONSTRUCTION
@@ -87,10 +93,16 @@ SCALER_PATH = os.path.join(OUTPUT_DIR, "scaler.pkl")
 
 # Sliding window size (in cycles)
 # ~2 days of orbital history (1 day ≈ 15 orbits, so 30 cycles ≈ 2 days)
+# These three values are the single source of truth for the whole pipeline —
+# sequences_construction.py and model.py both import them from here instead
+# of hardcoding their own copies (which is what caused the previous drift
+# vs. prediction_soh_lstm_target(_SOH).ipynb).
 WINDOW_SIZE = 30                # cycles — lookback window for prediction
 
 # Step size for sliding window (1 = generate all possible windows)
-STEP_SIZE = 1
+# Aligned with the notebook (STEP_SIZE = 3): denser windows overlap too much
+# and slow training down without adding much new information.
+STEP_SIZE = 3
 
 # Prediction horizon (1 = predict SOH at next cycle t+1)
 HORIZON = 1
@@ -99,28 +111,61 @@ HORIZON = 1
 NUM_FEATURES = 20
 
 # ============================================================================
-# 8. MODEL TRAINING (Optional, for Jupyter notebooks)
+# 8. MODEL ARCHITECTURE & TRAINING
+#    Mirrors build_model_v2() in prediction_soh_lstm_target(_SOH).ipynb
+#    (LSTM 128 -> LSTM 64 -> Self-Attention -> Dense 64 -> Dense 1)
 # ============================================================================
 
-# LSTM architecture
-LSTM_UNITS = 64                 # Hidden units in LSTM layer
-DROPOUT_RATE = 0.2              # Dropout for regularization
-BATCH_SIZE = 32                 # Training batch size
-EPOCHS = 100                    # Maximum epochs
-EARLY_STOPPING_PATIENCE = 10    # Stop if no improvement for N epochs
-VALIDATION_SPLIT = 0.2          # Fraction of training for validation
+# LSTM stack
+LSTM_UNITS_1 = 128               # First LSTM layer (return_sequences=True)
+LSTM_UNITS_2 = 64                # Second LSTM layer (return_sequences=True)
+LSTM_DROPOUT = 0.2               # Dropout applied after each LSTM block
 
-# Learning rate
-LEARNING_RATE = 0.001
+# Self-attention block
+ATTENTION_HEADS = 4
+ATTENTION_KEY_DIM = 16           # 4 heads * 16 = 64, matches LSTM_UNITS_2
+ATTENTION_DROPOUT = 0.1
 
-# Optimizer: adam, sgd, rmsprop
-OPTIMIZER = "adam"
+# Dense head
+DENSE_UNITS = 64
+DENSE_ACTIVATION = "elu"
+DENSE_DROPOUT = 0.1
 
-# Loss function: mse (Mean Squared Error) for regression
-LOSS = "mse"
+# Output activation.
+# NOTE: the notebook's docstring argues for a *linear* output (sigmoid's
+# gradient near SOH=1.0 is too flat and causes an upward bias), but the
+# actual notebook code still builds the layer with activation="sigmoid".
+# We keep "sigmoid" here to match the code that was actually run and
+# evaluated; switch to "linear" if you want to test the documented fix.
+OUTPUT_ACTIVATION = "sigmoid"
 
-# Metric: mae (Mean Absolute Error)
+# Regularization / optimizer
+L2_REG = 2e-4                    # L2 penalty on LSTM/Dense kernels + AdamW weight decay
+LEARNING_RATE = 3e-4
+CLIP_NORM = 1.0                  # Gradient norm clipping (AdamW)
+HUBER_DELTA = 0.01               # Huber loss crossover, ~1% SOH error
+
+# Training loop
+BATCH_SIZE = 128                 # Used by model.fit (matches notebook's model.fit call)
+SEQ_BUILD_BATCH_SIZE = 64        # Unused batch constant kept for parity with notebook (BATCH_SIZE var before fit override)
+EPOCHS = 400                     # Maximum epochs (MAX_EPOCHS in the notebook)
+EARLY_STOPPING_PATIENCE = 25
+REDUCE_LR_PATIENCE = 5
+REDUCE_LR_FACTOR = 0.3
+REDUCE_LR_MIN = 1e-6
+RANDOM_SEED = 42
+
+# Optimizer: adamw (per notebook). Kept for reference / documentation.
+OPTIMIZER = "adamw"
+
+# Loss function: Huber (robust to noisy cycles), metric: MAE
+LOSS = "huber"
 METRIC = "mae"
+
+# Where model.py saves its artifacts
+MODEL_PATH = os.path.join(OUTPUT_DIR, "cubesat_soh_lstm.keras")
+METRICS_PATH = os.path.join(OUTPUT_DIR, "metrics.csv")
+HISTORY_PATH = os.path.join(OUTPUT_DIR, "training_history.csv")
 
 # ============================================================================
 # 9. VALIDATION TARGETS (Reference from battery_model_Normal_conditions)
@@ -154,16 +199,34 @@ SAVE_FEATURES = True            # Save features.csv after feature engineering
 SAVE_TRAIN_TEST = True          # Save train.csv and test.csv
 SAVE_SEQUENCES = True           # Save sequences in .npy format
 
-# Feature output file paths
-FEATURES_PATH = os.path.join(OUTPUT_DIR, "features.csv")
-TRAIN_PATH = os.path.join(OUTPUT_DIR, "train.csv")
-TEST_PATH = os.path.join(OUTPUT_DIR, "test.csv")
-TRAIN_NORMALIZED_PATH = os.path.join(OUTPUT_DIR, "train_normalized.csv")
-TEST_NORMALIZED_PATH = os.path.join(OUTPUT_DIR, "test_normalized.csv")
-TRAIN_SEQ_PATH = os.path.join(OUTPUT_DIR, "train_sequences.npy")
-TEST_SEQ_PATH = os.path.join(OUTPUT_DIR, "test_sequences.npy")
-TRAIN_TARGETS_PATH = os.path.join(OUTPUT_DIR, "train_targets.npy")
-TEST_TARGETS_PATH = os.path.join(OUTPUT_DIR, "test_targets.npy")
+# Feature / split / normalization output paths
+# NOTE: these are the names actually imported downstream
+# (feature_engineering.py, split.py, normalize.py, sequences_construction.py).
+FILE_FEATURES = os.path.join(OUTPUT_DIR, "features.csv")
+FILE_TRAIN = os.path.join(OUTPUT_DIR, "train.csv")
+FILE_TEST = os.path.join(OUTPUT_DIR, "test.csv")
+FILE_TRAIN_NORM = os.path.join(OUTPUT_DIR, "train_normalized.csv")
+FILE_TEST_NORM = os.path.join(OUTPUT_DIR, "test_normalized.csv")
+
+# Scaler artifact (fit on train features only — matches scaler_X in the notebook)
+FILE_SCALER = os.path.join(OUTPUT_DIR, "scaler_X.pkl")
+FILE_SCALER_COLS = os.path.join(OUTPUT_DIR, "scaler_columns.txt")
+
+# LSTM sequence arrays (produced by sequences_construction.py, consumed by model.py)
+FILE_X_TRAIN = os.path.join(OUTPUT_DIR, "X_train.npy")
+FILE_Y_TRAIN = os.path.join(OUTPUT_DIR, "y_train.npy")
+FILE_X_TEST = os.path.join(OUTPUT_DIR, "X_test.npy")
+FILE_Y_TEST = os.path.join(OUTPUT_DIR, "y_test.npy")
+FILE_SEQ_INFO = os.path.join(OUTPUT_DIR, "sequences_info.txt")
+
+# Keep the old, more descriptive names as aliases for anything that still
+# references them (e.g. custom notebooks or notes).
+FEATURES_PATH = FILE_FEATURES
+TRAIN_PATH = FILE_TRAIN
+TEST_PATH = FILE_TEST
+TRAIN_NORMALIZED_PATH = FILE_TRAIN_NORM
+TEST_NORMALIZED_PATH = FILE_TEST_NORM
+SCALER_PATH = FILE_SCALER
 
 # =============================================================================
 # VERIFICATION (Auto-check on import)
