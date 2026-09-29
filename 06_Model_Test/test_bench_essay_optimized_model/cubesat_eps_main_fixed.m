@@ -16,7 +16,7 @@ fprintf('=== CubeSat REAL-TIME LSTM SOH Prediction (FINAL FIXED) ===\n\n');
 pyenv('Version', 'C:\Users\Amine\Desktop\files _matlab_test_bench\CubeSat_V4_Final\CubeSat_V4\tf_env\Scripts\python.exe', ...
       'ExecutionMode','OutOfProcess');
 
-module = py.importlib.import_module('lstm_core_5');
+module = py.importlib.import_module('lstm_core_5_test');
 py.importlib.reload(module);
 py_predictor = module.CubeSatSOHPredict();
 
@@ -117,7 +117,7 @@ for cycle = 1:n_max
     x = row.x_next;
     
     %% 4️⃣ Feature engineering
-    feat_struct = compute_features(cycle, row, history);
+    feat_struct = compute_features_fixed(cycle, row, history);
     
     %% 🔥 TRUE SOH lag
     if cycle == 1
@@ -175,7 +175,7 @@ for cycle = 1:n_max
     %% ========================================================
     %% 7️⃣ LOGGING
     %% ========================================================
-    if mod(cycle,200)==0 || cycle==1 || SOH_true(cycle)<0.75
+    if mod(cycle,30)==0 || cycle==1 || SOH_true(cycle)<0.75
         fprintf('Cycle %4d | True SOH: %.4f | Pred SOH: %.4f | QD: %.3f Ah\n', ...
             cycle, SOH_true(cycle), SOH_lstm(cycle), row.QD_Ah);
     end
