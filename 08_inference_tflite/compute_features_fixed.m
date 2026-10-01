@@ -1,4 +1,4 @@
-function feat = compute_features(cycle, row, history)
+function feat = compute_features_fixed(cycle, row, history)
 
 feat = struct();
 W = 10; % must match training ROLLING_W
@@ -20,7 +20,7 @@ feat.V_mean_rolling = mean(history.V_mean_V(idx_range));
 if cycle > 1
     feat.V_mean_lag_1 = history.V_mean_V(cycle-1);
 else
-    feat.V_mean_lag_1 = 0;
+    feat.V_mean_lag_1 = row.V_mean_V;   % was 0 (z=-57, never in training)
 end
 
 feat.V_min_fade = row.V_min_V - history.V_min_V(1);
