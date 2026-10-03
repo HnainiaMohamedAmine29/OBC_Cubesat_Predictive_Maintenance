@@ -2,6 +2,8 @@
 #ifndef TFLM_C_API_H_
 #define TFLM_C_API_H_
 
+#include <stdint.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -20,6 +22,7 @@ typedef enum {
 
 tflm_status_t tflm_init(void);
 tflm_status_t tflm_infer(const float *window, float *soh_out);
+uint32_t tflm_arena_used(void);   /* bytes of the tensor arena actually used (valid after tflm_init) */
 
 #ifdef __cplusplus
 }
